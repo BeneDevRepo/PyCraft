@@ -1,103 +1,37 @@
-from anyio import Event
 from  OpenGL.GL import *
 import OpenGL.GL.shaders as shaders
-from  OpenGL.arrays.numbers import NumberHandler as NH
+from  OpenGL.arrays.numbers import NumberHandler as NH # used to pass number references to pyopengl
 
 import pygame as pg
 import numpy as np
 
 import time
 
+from matrixMath import * # diy matrix math
+from Chunk import Chunk
+from World import World
 
-# vertices = [-1.,  1., 0., 1., # top right triangle
-#              1.,  1., 0., 1.,
-#              1., -1., 0., 1.,
-             
-#             -1.,  1., 0., 1., # bottom left triangle
-#              1., -1., 0., 1.,
-#             -1., -1., 0., 1.]
+
 d = .5
-# vertices = [-d,  d, 1., 1., # top right triangle
-#              d,  d, 1., 1.,
-#              d, -d, 1., 1.,
+# vertices = [-d,  d, 1.,   0., 1., # top right triangle
+#              d,  d, 1.,   1., 1.,
+#              d, -d, 1.,   1., 0.,
              
-#             -d,  d, 1., 1., # bottom left triangle
-#              d, -d, 1., 1.,
-#             -d, -d, 1., 1.]
-# vertices = [-d,  d, -1., # top right triangle
-#              d,  d, -1.,
-#              d, -d, -1.,
-             
-#             -d,  d, -1., # bottom left triangle
-#              d, -d, -1.,
-#             -d, -d, -1.]
-vertices = [-d,  d, -1.,   0., 1., # top right triangle
-             d,  d, -1.,   1., 1.,
-             d, -d, -1.,   1., 0.,
-             
-            -d,  d, -1.,   0., 1., # bottom left triangle
-             d, -d, -1.,   1., 0.,
-            -d, -d, -1.,   0., 0.]
-vertices = (GLfloat * len(vertices))(*vertices)
-# vertices = np.array(vertices, dtype=np.float32)
+#             -d,  d, 1.,   0., 1., # bottom left triangle
+#              d, -d, 1.,   1., 0.,
+#             -d, -d, 1.,   0., 0.]
+vertices = [-d,  d, 1.,   0., 1., # top right triangle
+             d,  d, 1.,   1., 1.,
+             d, -d, 1.,   1., 0.,
+            -d, -d, 1.,   0., 0.]
+indices = [0, 1, 2,  0, 2, 3]
+# vertices = (GLfloat * len(vertices))(*vertices)
+vertices = np.array(vertices, dtype=np.float32)
+indices = np.array(indices, dtype=np.int32)
+
 FLOATS_PER_POSITION = 3
 FLOATS_PER_UV = 2
 FLOATS_PER_VERTEX = FLOATS_PER_POSITION + FLOATS_PER_UV
-
-
-def perspectiveProj(fov, aspect_ratio, near_plane, far_plane):
-	num = 1.0 / np.tan(fov / 2.0)
-	num9 = num / aspect_ratio
-	return np.array([
-		[num9, 0.0, 0.0, 0.0],
-		[0.0, num, 0.0, 0.0],
-		[0.0, 0.0, far_plane / (near_plane - far_plane), -1.0],
-		[0.0, 0.0, (near_plane * far_plane) / (near_plane - far_plane), 0.0]
-	], dtype=np.float32)
-	# return np.array([
-	# 	num9, 0.0, 0.0, 0.0,
-	# 	0.0, num, 0.0, 0.0,
-	# 	0.0, 0.0, far_plane / (near_plane - far_plane), -1.0,
-	# 	0.0, 0.0, (near_plane * far_plane) / (near_plane - far_plane), 0.0
-	# ], dtype=np.float32)
-
-# def perspectiveProj(fovVert, aspect, near, far):
-#     s = 1. / np.tan(np.radians(fovVert) / 2.)
-#     sx, sy = s / aspect, s
-#     zz = (far + near) / (near - far)
-#     zw = 2 * far * near / (near - far)
-#     return np.matrix([[sx, 0,  0,  0],
-#                       [0,  sy, 0,  0],
-#                       [0,  0, zz, zw],
-#                       [0,  0, -1, 0]])
-
-def translate(xyz):
-    x, y, z = xyz
-    return np.matrix([[1,0,0,x],
-                      [0,1,0,y],
-                      [0,0,1,z],
-                      [0,0,0,1]], dtype=np.float32)
-
-def viewMat(eye, dir, up):
-    F = dir
-    f = normalize(F)
-    U = normalize(up[:3])
-    s = np.cross(f, U)
-    u = np.cross(s, f)
-    M = np.matrix(np.identity(4))
-    M[:3,:3] = np.vstack([s,u,-f])
-    T = translate(-eye)
-    return M * T
-# def lookat(eye, target, up):
-#     F = target[:3] - eye[:3]
-#     f = normalize(F)
-#     U = normalize(up[:3])
-#     s = np.cross(f, U)
-#     u = np.cross(s, f)
-#     M = np.matrix(np.identity(4))
-#     M[:3,:3] = np.vstack([s,u,-f])
-#     T = translate(-eye)
-#     return M * T
 
 
 def main():
@@ -108,11 +42,19 @@ def main():
 	pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 6)
 	pg.display.gl_set_attribute(pg.GL_CONTEXT_PROFILE_MASK, pg.GL_CONTEXT_PROFILE_CORE)
 
+	# setup window:
 	pg.display.set_mode((512, 512), pg.OPENGL | pg.DOUBLEBUF | pg.RESIZABLE, vsync = 1)
+
+	# enable mouse capturing:
+	pg.mouse.set_visible(False)
+	pg.event.set_grab(True)
 
 	glClearColor(0.5, 0.5, 0.5, 1.0)
 	glEnable(GL_DEPTH_TEST)
-	glDisable(GL_CULL_FACE)
+
+	# enable backface culling:
+	glEnable(GL_CULL_FACE)
+	glCullFace(GL_FRONT) # visible face is defined in clockwise vertex order
 
 	with open("main.vs.glsl") as file:
 		vertex_shader_code = file.readlines();
@@ -124,24 +66,38 @@ def main():
 		shaders.compileShader(fragment_shader_code, GL_FRAGMENT_SHADER)
 	)
 
-	mvp = glGetUniformLocation(prog, "MVP")
-	# iTime = glGetUniformLocation(prog, "iTime")
-	# uniformAsp = glGetUniformLocation(prog, "aspectRatio")
+	# mvp = glGetUniformLocation(prog, "MVP")
+	u_model = glGetUniformLocation(prog, "model")
+	u_view = glGetUniformLocation(prog, "view")
+	u_projection = glGetUniformLocation(prog, "projection")
 
 
+
+	# vertices, indices = Chunk(0, 0).getMesh()
+	vertices, indices = Chunk(0, 0).getMesh(None, None, None, None)
+	vertices, indices = np.array(vertices, dtype=np.float32), np.array(indices, dtype=np.int32)
 
 	####  create object  ####
-	# Create a new VAO (Vertex Array Object):
+	# Create Vertex Array Object:
 	vao = GLuint(-1)
 	glCreateVertexArrays(1, NH().dataPointer(vao))
 
-	# Generate buffers to hold our vertices:
+	# Create vertex buffer:
 	vbo = GLuint(-1)
 	glCreateBuffers(1, NH().dataPointer(vbo))
 
-	glNamedBufferStorage(vbo, len(vertices) * 4, vertices, GL_DYNAMIC_STORAGE_BIT)
+	# Create vertex buffer:
+	ebo = GLuint(-1)
+	glCreateBuffers(1, NH().dataPointer(ebo))
 
+
+	# upload vertex buffer:
+	glNamedBufferStorage(vbo, len(vertices) * 4, vertices, GL_DYNAMIC_STORAGE_BIT)
+	glNamedBufferStorage(ebo, len(indices) * 4, indices, GL_DYNAMIC_STORAGE_BIT)
+
+	# configure vertex attributes:
 	glVertexArrayVertexBuffer(vao, 0, vbo, 0, FLOATS_PER_VERTEX * 4) # vao, bindIndex, buffer, offset, stride
+	glVertexArrayElementBuffer(vao, ebo) # vao, buffer
 
 	glEnableVertexArrayAttrib(vao,  0)
 	glVertexArrayAttribFormat(vao,  0, FLOATS_PER_POSITION, GL_FLOAT, False, 0) # vao, attribIndex, size, type, normalized, offset
@@ -152,26 +108,18 @@ def main():
 	glEnableVertexArrayAttrib(vao, 1) # vao, attribIndex
 	####  /create object/  ####
 
-
-
 	glUseProgram(prog)
 	glBindVertexArray(vao)
 
-	# proj = perspectiveProj(90, 1., .01, 100.)
-	proj = perspectiveProj(90. * 3.1415926535 / 180., 1., .01, 100.)
-	view = np.identity(4, dtype=np.float32)
-	# view = np.matmul(translate((10, 0, 1)), view)
-	view = np.matmul(view, translate((1, 0, 1)))
-	# view = translate((100, 0, 0))
-	model = np.identity(4, dtype=np.float32)
 
-	# mvpMatrix = np.matmul(proj, view)
-	mvpMatrix = np.matmul(view, proj)
-	# mvpMatrix = np.matmul(np.matmul(proj, view), model)
-	# mvpMatrix = proj
+	# chunks = {}
+	# for x in range(-2, 2):
+	# 	for z in range(-2, 2):
+	# 		chunks[(x, 0, z)] = Chunk(x, z)
+	world = World()
+	
 
-	glUniformMatrix4fv(mvp, 1, GL_FALSE, mvpMatrix)
-
+	aspectRatio = 1
 
 	absTime = 0. # total elapsed time
 
@@ -179,21 +127,12 @@ def main():
 
 	accum = 0 # used for printing fps every second
 
+
+	pos = np.array([0, 0, 0], dtype=np.float32)
+	angles = [3.1415, 0] # horizontal (around y axis), vertical (around x axis)
+
+
 	while True:
-		current_time = time.perf_counter()
-		dt = current_time - prev_time
-		prev_time = current_time
-
-		accum += dt
-		absTime += dt;
-		
-		# glUniform1f(iTime, absTime)
-
-		
-		if accum >= .5:
-			accum -= .5
-			print("FPS:", 1. / dt)
-		
 		for event in pg.event.get():
 			if event.type == pg.QUIT:
 				return
@@ -201,11 +140,125 @@ def main():
 				return
 			elif event.type in [pg.VIDEORESIZE, pg.VIDEOEXPOSE]:
 				print("resize")
-				# viewport = glGetIntegerv(GL_VIEWPORT) # [x0, y0, x1, y1]
+				viewport = glGetIntegerv(GL_VIEWPORT) # [x0, y0, x1, y1]
+				aspectRatio = viewport[2] / viewport[3]
 				# glUniform1f(uniformAsp, viewport[2] / viewport[3]);
+		keys = pg.key.get_pressed()
 
+
+		current_time = time.perf_counter()
+		dt = current_time - prev_time
+		prev_time = current_time
+
+		accum += dt
+		absTime += dt;
+
+		if accum >= .5:
+			accum -= .5
+			print("FPS:", 1. / dt)
+
+		# start drawing frame:
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-		glDrawArrays(GL_TRIANGLES, 0, 6)
+
+		mouseX, mouseY = pg.mouse.get_rel()
+		angles[0] -= mouseX * 3.1415926535 / 180 * .1
+		angles[1] -= mouseY * 3.1415926535 / 180 * .1
+		angles[1] = max(-3.1415/2, min(3.1415/2, angles[1])) # constrain vertical viewing angle: -90deg < angle < 90deg
+		# x += mouseX * .1
+		# y += mouseY * .1
+
+
+		# # vertical viewing angle:
+		# viewDir = (0, np.sin(angles[1]), -np.cos(angles[1]))
+		# # rotate around y axis by horizontal viewing angle:
+		# viewDir = (
+		# 	viewDir[0] * np.cos(angles[0]) - viewDir[2] * np.sin(angles[0]),
+		# 	viewDir[1],
+		# 	viewDir[0] * np.sin(angles[0]) + viewDir[2] * np.cos(angles[0])
+		# )
+
+		# # vertical viewing angle:
+		# viewDir = (np.sin(angles[0]), 0, np.cos(angles[0]))
+		# # rotate around y axis by horizontal viewing angle:
+		# viewDir = (
+		# 	viewDir[0],
+		# 	viewDir[1] * np.cos(angles[1]) - viewDir[2] * np.sin(angles[1]),
+		# 	viewDir[1] * np.sin(angles[1]) + viewDir[2] * np.cos(angles[1])
+		# )
+
+		# view = viewMat(pos, viewDir, (0, 1, 0))
+		
+
+
+		speed = 10.
+		moveDir = np.array([
+			keys[pg.K_d]     - keys[pg.K_a],
+			keys[pg.K_SPACE] - keys[pg.K_LSHIFT],
+			keys[pg.K_s]     - keys[pg.K_w]
+		], dtype=np.float32)
+
+		up = np.array([0, 1, 0], dtype=np.float32)
+		front = np.array([np.cos(-angles[0]), 0, np.sin(-angles[0])], dtype=np.float32)
+		right = np.cross(front, up)
+
+		pos += moveDir[0] * front * speed * dt
+		pos += moveDir[1] * up * speed * dt
+		pos += moveDir[2] * right * speed * dt
+
+
+		world.loadChunks(pos, 2)
+
+
+
+		# moveDir = moveDir @ view[:3][:3]
+		# pos += front * (moveDir[2] * speed)
+
+		# pos[0] += moveDir[0] * speed
+		# pos[1] += moveDir[1] * speed
+		# pos[2] -= moveDir[2] * speed
+		# print(mouseX, mouseY)
+
+
+
+
+
+		# setup MVP matrix:
+		# proj = perspectiveProj(90, 1., .01, 100.)
+		proj = perspectiveProj(90. * 3.1415926535 / 180., aspectRatio, .01, 1000.)
+		# proj = np.identity(4, dtype=np.float32)
+
+		# view = np.identity(4, dtype=np.float32)
+		# view = viewMat(pos, (0, 0, -1), (0, 1, 0))
+		
+		# view = viewMat(pos, viewDir, (0, 1, 0))
+		# view = translate((x, 0, y))
+
+		# https://www.mauriciopoppe.com/notes/computer-graphics/viewing/camera/first-person-shot/
+		sa = np.sin(angles[0])
+		ca = np.cos(angles[0])
+		sb = np.sin(angles[1])
+		cb = np.cos(angles[1])
+		view = np.array([
+			[ ca, sa*sb, sa*cb, 0],
+			[  0,    cb,   -sb, 0],
+			[-sa, ca*sb, ca*cb, 0],
+			[  0,     0,     0, 1]
+		], dtype=np.float32)
+		view = translate(-pos) @ view
+
+		model = np.identity(4, dtype=np.float32)
+		# model = translate((np.cos(absTime), np.sin(absTime), 0))
+		# model = translate((x*.1, -y*.1, 0))
+		# model = translate(pos)
+
+
+		# glUniformMatrix4fv(mvp, 1, GL_FALSE, mvpMatrix)
+		glUniformMatrix4fv(u_model, 1, GL_FALSE, model)
+		glUniformMatrix4fv(u_view, 1, GL_FALSE, view)
+		glUniformMatrix4fv(u_projection, 1, GL_FALSE, proj)
+
+		# glDrawArrays(GL_TRIANGLES, 0, 6) # draw
+		glDrawElements(GL_TRIANGLES, len(indices), GL_UNSIGNED_INT, None) # draw
 
 		pg.display.flip()
 
