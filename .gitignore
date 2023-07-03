@@ -1,1 +1,7 @@
 __pycache__/
+build/
+module/
+.vscode/
+*.c
+*.pyd
+*.py_old

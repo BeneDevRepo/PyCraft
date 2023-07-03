@@ -2,7 +2,8 @@ from  OpenGL.GL import *
 import OpenGL.GL.shaders as shaders
 from  OpenGL.arrays.numbers import NumberHandler as NH # used to pass number references to pyopengl
 
-import pygame as pg
+# import pygame as pg
+import glfw
 import numpy as np
 
 import time
@@ -35,19 +36,37 @@ FLOATS_PER_VERTEX = FLOATS_PER_POSITION + FLOATS_PER_UV
 
 
 def main():
-	pg.init()
+	# pg.init()
+	if not glfw.init():
+		print("Failed to initialize glfw")
+		return
 
 	# set OpenGL profile to 4.6 core:
-	pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 4)
-	pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 6)
-	pg.display.gl_set_attribute(pg.GL_CONTEXT_PROFILE_MASK, pg.GL_CONTEXT_PROFILE_CORE)
+	# pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 4)
+	# pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 6)
+	# pg.display.gl_set_attribute(pg.GL_CONTEXT_PROFILE_MASK, pg.GL_CONTEXT_PROFILE_CORE)
+	glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
+	glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 6)
+	glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+	glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
 	# setup window:
-	pg.display.set_mode((512, 512), pg.OPENGL | pg.DOUBLEBUF | pg.RESIZABLE, vsync = 1)
+	# pg.display.set_mode((512, 512), pg.OPENGL | pg.DOUBLEBUF | pg.RESIZABLE, vsync = 1)
+	window = glfw.create_window(512, 512, "GLFW Window", None, None)
+
+	if not window:
+		print("Failed to create glfw window")
+		glfw.terminate()
+		return
+
+	glfw.make_context_current(window)
+
+	# print("Version:", glGetString(GL_VERSION));
 
 	# enable mouse capturing:
-	pg.mouse.set_visible(False)
-	pg.event.set_grab(True)
+	# pg.mouse.set_visible(False)
+	# pg.event.set_grab(True)
+	glfw.set_input_mode(window, glfw.CURSOR, glfw.CURSOR_DISABLED);
 
 	glClearColor(0.5, 0.5, 0.5, 1.0)
 	glEnable(GL_DEPTH_TEST)
@@ -90,14 +109,25 @@ def main():
 	ebo = GLuint(-1)
 	glCreateBuffers(1, NH().dataPointer(ebo))
 
-
-	# upload vertex buffer:
-	glNamedBufferStorage(vbo, len(vertices) * 4, vertices, GL_DYNAMIC_STORAGE_BIT)
-	glNamedBufferStorage(ebo, len(indices) * 4, indices, GL_DYNAMIC_STORAGE_BIT)
-
-	# configure vertex attributes:
+	# link vao, vbo and ebo
 	glVertexArrayVertexBuffer(vao, 0, vbo, 0, FLOATS_PER_VERTEX * 4) # vao, bindIndex, buffer, offset, stride
 	glVertexArrayElementBuffer(vao, ebo) # vao, buffer
+
+	# upload vertex buffer:
+	# glNamedBufferStorage(vbo, len(vertices) * 4, vertices, GL_DYNAMIC_STORAGE_BIT)
+	# glNamedBufferStorage(ebo, len(indices) * 4, indices, GL_DYNAMIC_STORAGE_BIT)
+
+	# glBindVertexArray(vao)
+	# glBufferStorage(GL_ARRAY_BUFFER, len(vertices) * 4, vertices, GL_DYNAMIC_STORAGE_BIT)
+	# glBufferStorage(GL_ELEMENT_ARRAY_BUFFER, len(indices) * 4, indices, GL_DYNAMIC_STORAGE_BIT)
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo)
+	glBufferData(GL_ARRAY_BUFFER, len(vertices) * 4, vertices, GL_DYNAMIC_DRAW)
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, len(indices) * 4, indices, GL_DYNAMIC_DRAW)
+
+	# configure vertex attributes:
+
 
 	glEnableVertexArrayAttrib(vao,  0)
 	glVertexArrayAttribFormat(vao,  0, FLOATS_PER_POSITION, GL_FLOAT, False, 0) # vao, attribIndex, size, type, normalized, offset
@@ -132,19 +162,30 @@ def main():
 	angles = [3.1415, 0] # horizontal (around y axis), vertical (around x axis)
 
 
-	while True:
-		for event in pg.event.get():
-			if event.type == pg.QUIT:
-				return
-			elif event.type == pg.KEYUP and event.key == pg.K_ESCAPE:
-				return
-			elif event.type in [pg.VIDEORESIZE, pg.VIDEOEXPOSE]:
-				print("resize")
-				viewport = glGetIntegerv(GL_VIEWPORT) # [x0, y0, x1, y1]
-				aspectRatio = viewport[2] / viewport[3]
-				# glUniform1f(uniformAsp, viewport[2] / viewport[3]);
-		keys = pg.key.get_pressed()
+	# while True:
+	# 	for event in pg.event.get():
+	# 		if event.type == pg.QUIT:
+	# 			return
+	# 		elif event.type == pg.KEYUP and event.key == pg.K_ESCAPE:
+	# 			return
+	# 		elif event.type in [pg.VIDEORESIZE, pg.VIDEOEXPOSE]:
+	# 			print("resize")
+	# 			viewport = glGetIntegerv(GL_VIEWPORT) # [x0, y0, x1, y1]
+	# 			aspectRatio = viewport[2] / viewport[3]
+	# 			# glUniform1f(uniformAsp, viewport[2] / viewport[3]);
+	# 	keys = pg.key.get_pressed()
 
+	pmouseX, pmouseY = 0, 0
+	mouseX, mouseY = 0, 0
+
+	while not glfw.window_should_close(window):
+		glfw.poll_events()
+
+		if glfw.get_key(window, glfw.KEY_ESCAPE) == glfw.PRESS:
+			return
+		
+		pmouseX, pmouseY = mouseX, mouseY
+		mouseX, mouseY = glfw.get_cursor_pos(window)
 
 		current_time = time.perf_counter()
 		dt = current_time - prev_time
@@ -160,9 +201,10 @@ def main():
 		# start drawing frame:
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-		mouseX, mouseY = pg.mouse.get_rel()
-		angles[0] -= mouseX * 3.1415926535 / 180 * .1
-		angles[1] -= mouseY * 3.1415926535 / 180 * .1
+		# dx, dy = pg.mouse.get_rel()
+		dx, dy = mouseX-pmouseX, mouseY-pmouseY
+		angles[0] -= dx * 3.1415926535 / 180 * .1
+		angles[1] -= dy * 3.1415926535 / 180 * .1
 		angles[1] = max(-3.1415/2, min(3.1415/2, angles[1])) # constrain vertical viewing angle: -90deg < angle < 90deg
 		# x += mouseX * .1
 		# y += mouseY * .1
@@ -191,10 +233,16 @@ def main():
 
 
 		speed = 10.
+		# moveDir = np.array([
+		# 	keys[pg.K_d]     - keys[pg.K_a],
+		# 	keys[pg.K_SPACE] - keys[pg.K_LSHIFT],
+		# 	keys[pg.K_s]     - keys[pg.K_w]
+		# ], dtype=np.float32)
+		pressed = lambda key: glfw.get_key(window, key) == glfw.PRESS
 		moveDir = np.array([
-			keys[pg.K_d]     - keys[pg.K_a],
-			keys[pg.K_SPACE] - keys[pg.K_LSHIFT],
-			keys[pg.K_s]     - keys[pg.K_w]
+			pressed(glfw.KEY_D) - pressed(glfw.KEY_A),
+			pressed(glfw.KEY_SPACE) - pressed(glfw.KEY_LEFT_SHIFT),
+			pressed(glfw.KEY_S) - pressed(glfw.KEY_W)
 		], dtype=np.float32)
 
 		up = np.array([0, 1, 0], dtype=np.float32)
@@ -260,13 +308,17 @@ def main():
 		# glDrawArrays(GL_TRIANGLES, 0, 6) # draw
 		glDrawElements(GL_TRIANGLES, len(indices), GL_UNSIGNED_INT, None) # draw
 
-		pg.display.flip()
+		# pg.display.flip()
+		glfw.swap_buffers(window)
+	
+	glfw.terminate()
 
 
 if __name__ == '__main__':
 	try:
 		main()
 	except Exception as error:
-		pg.quit()
+		# pg.quit()
+		glfw.terminate()
 		print("Failed!", error)
 		time.sleep(1000)
