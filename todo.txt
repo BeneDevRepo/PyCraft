@@ -1,0 +1,9 @@
+x (A) expose block access to python
+x (A) Block Types
+(B) improve lighting
+(B) shadow maps
+(A) multithreading
+(A) block breaking + placing
+(A) physics
+(C) atmospheric scattering
+(B) bloom + post-processing pipeline

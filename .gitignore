@@ -3,5 +3,6 @@ build/
 module/
 .vscode/
 *.c
+*.cpp
 *.pyd
 *.py_old
