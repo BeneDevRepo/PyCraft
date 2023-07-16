@@ -1,5 +1,6 @@
 #version 460
 
+precision highp float;
 
 in FS_IN {
 	vec3 fragPos;

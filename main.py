@@ -18,6 +18,7 @@ def main():
 	pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 4)
 	pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 6)
 	pg.display.gl_set_attribute(pg.GL_CONTEXT_PROFILE_MASK, pg.GL_CONTEXT_PROFILE_CORE)
+	pg.display.gl_set_attribute(pg.GL_DEPTH_SIZE, 24)
 
 	# setup window:
 	pg.display.set_mode((512, 512), pg.OPENGL | pg.DOUBLEBUF | pg.RESIZABLE, vsync = 1)
