@@ -5,12 +5,32 @@ from  OpenGL.arrays.numbers import NumberHandler as NH # used to pass number ref
 
 from constants import *
 from Chunk import Chunk
+from ChunkWorker import ChunkWorker
+
 import time
+from collections import defaultdict
+
+
 
 class World:
 	def __init__(self):
 		self.chunks = {}
 		self.meshes = {}
+
+		self.numWorkers = 1
+		self.workers = []
+		self.requested = defaultdict(lambda: False)
+		self.newChunks = []
+		
+		for i in range(self.numWorkers):
+			worker = ChunkWorker()
+			worker.start()
+			self.workers.append(worker)
+			# self.workers[0].getLoaded()
+	
+	def shutdown(self):
+		for i in range(self.numWorkers):
+			self.workers[i].stop()
 
 	def createBuffers():
 		# Create Vertex Array Object:
@@ -49,12 +69,53 @@ class World:
 		return (vao, vbo, ebo)
 
 
+	def requestChunk(self, chunkPos):
+		if chunkPos not in self.chunks and not self.requested[chunkPos]:
+			self.workers[0].requestChunks(chunkPos)
+			self.requested[chunkPos] = True
+			return True
+		return False
+
+	def syncChunks(self):
+		MAX_LOADS_PER_FRAME = 5
+		numLoaded = 0
+
+		self.newChunks += self.workers[0].getLoaded()
+		# for newChunk in self.newChunks:
+		for i in range(len(self.newChunks)):
+
+			newChunk = self.newChunks.pop()
+			chunkPos = newChunk.getPos()
+
+			if chunkPos in self.requested:
+				self.requested[chunkPos] = False
+				self.chunks[chunkPos] = newChunk
+
+				# create chunk mesh:
+				vertices, indices = self.chunks[chunkPos].getMesh(None, None, None, None)
+
+				vao, vbo, ebo = World.createBuffers()
+
+				self.meshes[chunkPos] = (vao, vbo, ebo, len(indices))
+
+				# upload vertex + index buffer:
+				if len(indices) > 0:
+					glNamedBufferStorage(self.meshes[chunkPos][1], len(vertices) * 4, vertices, GL_DYNAMIC_STORAGE_BIT)
+					glNamedBufferStorage(self.meshes[chunkPos][2], len(indices) * 4, indices, GL_DYNAMIC_STORAGE_BIT)
+			
+			numLoaded += 1
+			if numLoaded >= MAX_LOADS_PER_FRAME:
+				return
+
 	def loadChunk(self, chunkPos):
+		# self.requestChunk(chunkPos)
+		# return
+
 		start = time.time_ns()
 		# load chunk:
 		self.chunks[chunkPos] = Chunk(*chunkPos)
 
-		# print("Created chunk in:", (time.time_ns() - start) / (10**6), "ms")
+		print("Created chunk in:", (time.time_ns() - start) / (10**6), "ms")
 
 		start = time.time_ns()
 		# create chunk mesh:
@@ -76,11 +137,18 @@ class World:
 
 
 	def unloadChunk(self, chunkPos):
-		del self.chunks[chunkPos]
-		glDeleteVertexArrays(1, NH().dataPointer(self.meshes[chunkPos][0]))
-		glDeleteBuffers(1, NH().dataPointer(self.meshes[chunkPos][1]))
-		glDeleteBuffers(1, NH().dataPointer(self.meshes[chunkPos][2]))
-		del self.meshes[chunkPos]
+		self.requested[chunkPos] = False # cancel loading chunk
+
+		# delete if already loaded:
+		if chunkPos in self.chunks:
+			del self.chunks[chunkPos]
+
+		# delete mesh if present:
+		if chunkPos in self.meshes:
+			glDeleteVertexArrays(1, NH().dataPointer(self.meshes[chunkPos][0]))
+			glDeleteBuffers(1, NH().dataPointer(self.meshes[chunkPos][1]))
+			glDeleteBuffers(1, NH().dataPointer(self.meshes[chunkPos][2]))
+			del self.meshes[chunkPos]
 
 
 	def loadChunks(self, pos, viewDist): # pos: [playerX, playerY, playerZ], viewDist: distance in chunks
@@ -108,16 +176,27 @@ class World:
 				d = max(abs(chunkPos[0] - centerChunk[0]),  abs(chunkPos[1] - centerChunk[1]))
 				if d <= viewDist and chunkPos not in self.chunks:
 					self.loadChunk(chunkPos)
+					numCreated += 1
+
+					# if self.requestChunk(chunkPos):
+					# 	numCreated += 1
 
 					# print("Created at:", chunkPos)
 
-					numCreated += 1
 
 					if LIMIT_CHUNK_LOADS and numCreated >= MAX_LOADS_PER_FRAME:
 						break
 
 			if LIMIT_CHUNK_LOADS and numCreated >= MAX_LOADS_PER_FRAME:
 						break
+		
 
 		# if numCreated!=0 or numDeleted!=0:
-		# 	print("Created:", numCreated, "Deleted:", numDeleted, "In:", (time.time_ns() - start) / (10**6), "ms")
+		if time.time_ns() - start > 1_000_000: # more than 1ms
+			print("Requested:", numCreated, "Deleted:", numDeleted, "In:", (time.time_ns() - start) / (10**6), "ms")
+			# print("Created:", numCreated, "Deleted:", numDeleted, "In:", (time.time_ns() - start) / (10**6), "ms")
+		
+		start = time.time_ns()
+		# self.syncChunks()
+		if time.time_ns() - start > 1_000_000: # more than 1ms
+			print("Synced in:", (time.time_ns() - start) / (10**6), "ms")

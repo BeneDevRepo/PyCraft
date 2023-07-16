@@ -23,6 +23,14 @@ public:
 		return blocks;
 	}
 
+	inline int64_t getX() const {
+		return x;
+	}
+
+	inline int64_t getZ() const {
+		return z;
+	}
+
 	inline void generate()  {
 		for(size_t x = 0; x < CHUNK_SIZE_X; x++) {
 			for(size_t y = 0; y < CHUNK_SIZE_Y; y++) {

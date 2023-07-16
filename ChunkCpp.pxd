@@ -1,21 +1,25 @@
 # distutils: language = c++
 
+
 import cython
 
 cimport numpy as np
 import numpy as np
 
 from libc.stdint cimport uint8_t, uint32_t, int64_t
-from libcpp.vector cimport vector
+# from libcpp.vector cimport vector
 
 from constants import *
 
 cdef extern from "ChunkCpp.hpp":
 	cdef cppclass ChunkCpp:
+		# int64_t x, z
 		ChunkCpp() except +
 		ChunkCpp(ChunkCpp&) except +
 		ChunkCpp(int64_t, int64_t) except +
 		void* getBuffer() nogil
+		int64_t getX() nogil
+		int64_t getZ() nogil
 		void generate() nogil
 		void generateMesh() nogil
 

@@ -70,7 +70,8 @@ void main() {
 
 	vec3 ambient = vec3(.2);
 	vec3 diffuse = max(0., dot(lightDir, normal)) * vec3(1., .6, .5);
-	vec3 specular = max(0., dot(reflect(-lightDir, normal), viewDir)) * vec3(1., .6, .5);
+	vec3 specular = pow(max(0., dot(reflect(-lightDir, normal), viewDir)), 128.) * vec3(1., .6, .5);
+
 	vec3 lightCol = ambient + diffuse * .5 + specular * .5;
 
 	vec3 col = albedo * lightCol;

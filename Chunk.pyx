@@ -7,16 +7,21 @@ cimport numpy as np
 import numpy as np
 
 from libc.stdint cimport uint8_t, uint32_t, int64_t
-from libcpp.vector cimport vector
+# from libcpp.vector cimport vector
 
 from ChunkCpp cimport ChunkCpp
 from constants import *
 
 
 cdef class Chunk:
-	cdef int64_t x, z
-	cdef ChunkCpp* chunk
-	cdef np.ndarray blocks
+	# cdef int64_t x, z
+	# cdef ChunkCpp* chunk
+	# cdef np.ndarray blocks
+
+	# def __cinit__(self):
+	# 	pass
+	# def __init__(self):
+	# 	pass
 
 	def __init__(self, x, z):
 		self.x = x
@@ -24,7 +29,22 @@ cdef class Chunk:
 		self.chunk = new ChunkCpp(x, z)
 		self.blocks = np.asarray(<uint8_t[:CHUNK_SIZE_X, :CHUNK_SIZE_Y, :CHUNK_SIZE_Z]>self.chunk.getBuffer())
 		self.chunk.generate()
-                                                           
+
+	def __dealloc__(self):
+		del self.chunk
+
+	@staticmethod
+	cdef Chunk create(ChunkCpp* chunkCpp):
+		cdef Chunk obj = Chunk.__new__(Chunk)
+		obj.x = chunkCpp.getX()
+		obj.z = chunkCpp.getZ()
+		obj.chunk = chunkCpp
+		obj.blocks = np.asarray(<uint8_t[:CHUNK_SIZE_X, :CHUNK_SIZE_Y, :CHUNK_SIZE_Z]>chunkCpp.getBuffer())
+		return obj
+
+	def getPos(self):
+		return (self.x, self.z)
+		
 	@cython.cdivision(True)     # Deactivate division by 0 checking.
 	def getMesh(self, nx, px, nz, pz): # parameters: neighporing chunks (negative x, positive x, negative z, positive z)
 		self.chunk.generateMesh();

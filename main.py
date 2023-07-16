@@ -68,13 +68,13 @@ def main():
 	pos = np.array([0, 100, 0], dtype=np.float32)
 	angles = [3.1415, 0] # horizontal (around y axis), vertical (around x axis)
 
-
-	while True:
+	stop = False
+	while not stop:
 		for event in pg.event.get():
 			if event.type == pg.QUIT:
-				return
+				stop = True
 			elif event.type == pg.KEYUP and event.key == pg.K_ESCAPE:
-				return
+				stop = True
 			elif event.type in [pg.VIDEORESIZE, pg.VIDEOEXPOSE]:
 				print("resize")
 				viewport = glGetIntegerv(GL_VIEWPORT) # [x0, y0, x1, y1]
@@ -119,7 +119,7 @@ def main():
 		pos += moveDir[2] * right * speed * dt
 
 
-		world.loadChunks(pos, 16)
+		world.loadChunks(pos, 5)
 		# world.loadChunks((0, 0, 0), 2)
 
 
@@ -161,6 +161,10 @@ def main():
 			glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, None) # draw
 
 		pg.display.flip()
+
+
+	## Shutdown:
+	world.shutdown()
 
 
 
