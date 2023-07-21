@@ -49,9 +49,22 @@ vec3 aces(in vec3 x) {
 
 
 void main() {
+
     // demo-Textur mittels noise:
-	vec2 pixPos = floor(uv * 16.) + round(fragPos.xy);
+	vec2 pixPos = floor(uv * 16.);// + round(fragPos.xy);
 	vec3 albedo = vec3(.7, 0., 1.);
+
+	vec3 nLocal = normalize(vec3(noise(pixPos), 1., noise(pixPos+vec2(7., 3.))));
+	vec3 norm = vec3(0.);
+	if(abs(normal.y) > .7) { // top/bottom face
+		norm += nLocal.x * vec3(normal.y, 0., 0.);
+		norm += nLocal.y * vec3(0., normal.y, 0.);
+		norm += nLocal.z * vec3(0., 0., normal.y);
+	} else { // side face
+		norm += nLocal.x * vec3(normal.z, 0., -normal.x);
+		norm += nLocal.y * normal;
+		norm += nLocal.z * vec3(0., 1., 0.);
+	}
 
 	if(block == BLOCK_STONE) {
 		albedo = vec3(mix(vec3(.3), vec3(.4), noise(pixPos))); // stone
@@ -70,8 +83,8 @@ void main() {
 	vec3 viewDir = normalize(viewPos - fragPos);
 
 	vec3 ambient = vec3(.2);
-	vec3 diffuse = max(0., dot(lightDir, normal)) * vec3(1., .6, .5);
-	vec3 specular = pow(max(0., dot(reflect(-lightDir, normal), viewDir)), 128.) * vec3(1., .6, .5);
+	vec3 diffuse = max(0., dot(lightDir, norm)) * vec3(1., .6, .5);
+	vec3 specular = pow(max(0., dot(reflect(-lightDir, norm), viewDir)), 32.) * vec3(1., .6, .5) * 5.;
 
 	vec3 lightCol = ambient + diffuse * .5 + specular * .5;
 

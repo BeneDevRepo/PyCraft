@@ -33,6 +33,7 @@ cdef class Chunk:
 	def __dealloc__(self):
 		del self.chunk
 
+	@cython.nogil
 	@staticmethod
 	cdef Chunk create(ChunkCpp* chunkCpp):
 		cdef Chunk obj = Chunk.__new__(Chunk)
@@ -44,23 +45,29 @@ cdef class Chunk:
 
 	def getPos(self):
 		return (self.x, self.z)
+	
+	def getBlocks(self):
+		return self.blocks
+	
+	def generateMesh(self, nx, px, nz, pz):
+		self.chunk.generateMesh()
+		
 		
 	@cython.cdivision(True)     # Deactivate division by 0 checking.
-	def getMesh(self, nx, px, nz, pz): # parameters: neighporing chunks (negative x, positive x, negative z, positive z)
-		self.chunk.generateMesh();
+	def getMesh(self): # parameters: neighporing chunks (negative x, positive x, negative z, positive z)
 
 		cdef float* verts = self.chunk.getVertices()
+		cdef uint32_t* inds = self.chunk.getIndices()
 
 		cdef int numVerts = self.chunk.numVertices()
 		cdef int numInds = self.chunk.numIndices()
-		cdef int numQuads = numInds // 6
+		# cdef int numQuads = numInds // 6
 
 		# prevent 0-size errors
 		if numVerts == 0:
 			return np.empty((0)), np.empty((0))
 
 		# cdef vector[uint32_t] inds = self.chunk.getIndices(numQuads)
-		cdef uint32_t* inds = self.chunk.getIndices(numQuads)
 
 		# cdef np.ndarray va = np.ascontiguousarray(verts, dtype=np.float32)
 		# cdef np.ndarray ia = np.ascontiguousarray(inds, dtype=np.uint32)

@@ -167,7 +167,7 @@ public:
 		return vertexBuffer.data();
 	}
 
-	inline uint32_t* getIndices(const size_t numQuads) {
+	inline uint32_t* getIndices() {
 		return indexBuffer.data();
 	}
 

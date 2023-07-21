@@ -75,18 +75,23 @@ inline Block getBlock(const int64_t x, const int64_t y, const int64_t z) {
 
 
 	const float continentality = octaveNoise(x * .0005, z * .0005, 8);
-	const float height = mapContinental(continentality) * 255;
+	const float baseHeight = mapContinental(continentality) * 255;
 
 	const float cliffScale = .0002;
 	const float cliffNoise = octaveNoise(x * cliffScale, z * cliffScale, 8);
 	const float cliffFactor = smoothstep(cliffNoise, .51, .51 + .01)
 									* smoothstep(cliffNoise, .53, .53 - .01);
 
-	const bool base = y < height * (1 - cliffFactor * .8);
+	const int heightOffset = octaveNoise(x * .01 + 5354, z * .01 + 3473, 8) * 20 - 10;
 
-	if(base) {
-		if(y < 100) {
-			return BLOCK_GRASS;
+	const size_t height = baseHeight * (1 - cliffFactor * .8);
+	const bool solid = y <= height;
+
+	if(solid) {
+		if(y < 100 + heightOffset) {
+			if(y == height)
+				return BLOCK_GRASS;
+			return BLOCK_DIRT;
 		} else if(y < 170) {
 			return BLOCK_STONE;
 		}

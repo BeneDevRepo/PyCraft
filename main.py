@@ -9,6 +9,9 @@ import time
 
 from matrixMath import * # diy matrix math
 from World import World
+from Gui import Gui
+
+import math
 
 
 def main():
@@ -55,9 +58,10 @@ def main():
 	u_viewPos = glGetUniformLocation(prog, "viewPos")
 
 
-	glUseProgram(prog)
+	# glUseProgram(prog)
 
 	world = World()
+	gui = Gui()
 
 	aspectRatio = 1
 
@@ -80,7 +84,127 @@ def main():
 				print("resize")
 				viewport = glGetIntegerv(GL_VIEWPORT) # [x0, y0, x1, y1]
 				aspectRatio = viewport[2] / viewport[3]
-				# glUniform1f(uniformAsp, viewport[2] / viewport[3]);
+				# glUniform1f(uniformAsp, viewport[2] / viewport[3])
+
+
+		if pg.mouse.get_pressed()[0] or pg.mouse.get_pressed()[2]:
+			MAX_DIST = 100
+
+			ro = np.array(pos, copy=True)
+
+			sa = np.sin(angles[0])
+			ca = np.cos(angles[0])
+			sb = np.sin(angles[1])
+			cb = np.cos(angles[1])
+			view = np.array([
+				[ ca, sa*sb, sa*cb],
+				[  0,    cb,   -sb],
+				[-sa, ca*sb, ca*cb]
+			], dtype=np.float32)
+			rd = view @ np.array([0, 0, -1], dtype=np.float32)
+
+
+			dirX = rd[0]
+			dirY = rd[1]
+			dirZ = rd[2]
+
+			mapX = math.floor(ro[0])
+			mapY = math.floor(ro[1])
+			mapZ = math.floor(ro[2])
+
+			stepX = 1 if dirX >= 0 else -1
+			stepY = 1 if dirY >= 0 else -1
+			stepZ = 1 if dirZ >= 0 else -1
+
+			deltaDistX = abs(1. / dirX)
+			deltaDistY = abs(1. / dirY)
+			deltaDistZ = abs(1. / dirZ)
+
+			sideDistX = 0
+			sideDistY = 0
+			sideDistZ = 0
+
+			if dirX < 0:
+				sideDistX = (ro[0] - mapX) * deltaDistX
+			else:
+				sideDistX = (mapX + 1. - ro[0]) * deltaDistX
+
+			if dirY < 0:
+				sideDistY = (ro[1] - mapY) * deltaDistY
+			else:
+				sideDistY = (mapY + 1. - ro[1]) * deltaDistY
+
+			if dirZ < 0:
+				sideDistZ = (ro[2] - mapZ) * deltaDistZ
+			else:
+				sideDistZ = (mapZ + 1. - ro[2]) * deltaDistZ
+
+
+			X_AXIS = 0
+			Y_AXIS = 1
+			Z_AXIS = 2
+
+			axis = X_AXIS
+
+			i = 0
+			while i < 100:
+				i += 1
+
+				chunkX = math.floor(mapX / 16)
+				chunkZ = math.floor(mapZ / 16)
+				chunkPos = (chunkX, chunkZ)
+
+				if (mapX - ro[0])**2 + (mapY - ro[1])**2 + (mapZ - ro[2])**2 > MAX_DIST**2: # max distance exceeded
+					axis = -1
+					break # hit nothing
+
+				if chunkPos in world.chunks:
+					blocks = world.chunks[chunkPos].getBlocks()
+					if blocks[mapX-chunkX*16][mapY][mapZ-chunkZ*16] != 0:
+						break # hit block
+
+				if sideDistX < sideDistY and sideDistX < sideDistZ:
+					sideDistX += deltaDistX
+					mapX += stepX
+					axis = X_AXIS
+				elif sideDistY < sideDistX and sideDistY < sideDistZ:
+					sideDistY += deltaDistY
+					mapY += stepY
+					axis = Y_AXIS
+				else:
+					sideDistZ += deltaDistZ
+					mapZ += stepZ
+					axis = Z_AXIS
+
+			if axis != -1: # hit something
+				if pg.mouse.get_pressed()[0]:
+					chunkX = math.floor(mapX / 16)
+					chunkZ = math.floor(mapZ / 16)
+					chunkPos = (chunkX, chunkZ)
+
+					if chunkPos in world.chunks:
+						blocks = world.chunks[chunkPos].getBlocks()
+
+						blocks[mapX-chunkX*16][mapY][mapZ-chunkZ*16] = 0
+						world.loadChunkMesh(chunkPos)
+
+				if pg.mouse.get_pressed()[2]:
+					normal = ((axis==X_AXIS) * -stepX, (axis==Y_AXIS) * -stepY, (axis==Z_AXIS) * -stepZ)
+					mapX, mapY, mapZ = mapX + normal[0], mapY + normal[1], mapZ + normal[2]
+
+					chunkX = math.floor(mapX / 16)
+					chunkZ = math.floor(mapZ / 16)
+					chunkPos = (chunkX, chunkZ)
+
+					if chunkPos in world.chunks:
+						blocks = world.chunks[chunkPos].getBlocks()
+
+						if blocks[mapX-chunkX*16][mapY][mapZ-chunkZ*16] == 0:
+							blocks[mapX-chunkX*16][mapY][mapZ-chunkZ*16] = 1
+							world.loadChunkMesh(chunkPos)
+				
+
+				
 		keys = pg.key.get_pressed()
 
 
@@ -89,7 +213,7 @@ def main():
 		prev_time = current_time
 
 		accum += dt
-		absTime += dt;
+		absTime += dt
 
 		if accum >= .5:
 			accum -= .5
@@ -98,9 +222,9 @@ def main():
 		# start drawing frame:
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-		dx, dy = pg.mouse.get_rel()
-		angles[0] -= dx * 3.1415926535 / 180 * .1
-		angles[1] -= dy * 3.1415926535 / 180 * .1
+		dirX, dirY = pg.mouse.get_rel()
+		angles[0] -= dirX * 3.1415926535 / 180 * .1
+		angles[1] -= dirY * 3.1415926535 / 180 * .1
 		angles[1] = max(-3.1415/2, min(3.1415/2, angles[1])) # constrain vertical viewing angle: -90deg < angle < 90deg
 
 
@@ -126,6 +250,9 @@ def main():
 
 
 
+		
+		glUseProgram(prog)
+
 
 
 		# setup matrices:
@@ -144,9 +271,11 @@ def main():
 			[  0,     0,     0, 1]
 		], dtype=np.float32)
 		view = translate(-pos) @ view
+		
 		glUniformMatrix4fv(u_view, 1, GL_FALSE, view)
 		
 		glUniform3fv(u_viewPos, 1, pos)
+
 
 		for chunkPos in world.chunks.keys():
 			model = translate((chunkPos[0] * 16, 0, chunkPos[1] * 16))
@@ -160,6 +289,8 @@ def main():
 
 			glBindVertexArray(vao)
 			glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, None) # draw
+		
+		gui.draw()
 
 		pg.display.flip()
 

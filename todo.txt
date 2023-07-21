@@ -1,7 +1,8 @@
 x (A) expose block access to python
 x (A) Block Types
-(A) multithreading
-(A) block breaking + placing
+x (A) multithreading
+	(A) fix MASSIVE (200ms) chunkSync spikes (most likely caused by waiting for mutex)
+x (A) block breaking + placing
 (A) physics
 (B) improve lighting
 (B) shadow maps

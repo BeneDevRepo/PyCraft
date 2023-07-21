@@ -27,6 +27,6 @@ cdef extern from "ChunkCpp.hpp":
 		# vector[float] getMesh() nogil
 		# vector[uint32_t] getIndices(size_t) nogil
 		float* getVertices() nogil
-		uint32_t* getIndices(size_t) nogil
+		uint32_t* getIndices() nogil
 		size_t numVertices() nogil
 		size_t numIndices() nogil

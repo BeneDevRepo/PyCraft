@@ -17,7 +17,7 @@ class World:
 		self.chunks = {}
 		self.meshes = {}
 
-		self.numWorkers = 1
+		self.numWorkers = 8
 		self.workers = []
 		self.requested = defaultdict(lambda: False)
 		self.newChunks = []
@@ -71,56 +71,76 @@ class World:
 
 	def requestChunk(self, chunkPos):
 		if chunkPos not in self.chunks and not self.requested[chunkPos]:
-			self.workers[0].requestChunks(chunkPos)
+			# self.workers[0].requestChunks(chunkPos)
+			self.workers[abs(hash(chunkPos)) % self.numWorkers].requestChunks(chunkPos)
 			self.requested[chunkPos] = True
 			return True
 		return False
 
 	def syncChunks(self):
-		MAX_LOADS_PER_FRAME = 5
-		numLoaded = 0
+		start = time.time_ns()
+		MAX_TIME = 1_000_000
+		# MAX_LOADS_PER_FRAME = 5
+		# numLoaded = 0
 
-		self.newChunks += self.workers[0].getLoaded()
+		for worker in self.workers:
+			self.newChunks += worker.getLoaded() # very short execution times; usually not problematic
+			if time.time_ns() - start >= MAX_TIME:
+				return
+		# print("getLoaded() took", (time.time_ns() - start) / 1000, "us")
+
+		# afterLoad = time.time_ns()
+
+		# TODO: Figure out WHY this loop spikes to 200ms:
 		# for newChunk in self.newChunks:
 		for i in range(len(self.newChunks)):
+			if time.time_ns() - start >= MAX_TIME:
+				return
 
 			newChunk = self.newChunks.pop()
 			chunkPos = newChunk.getPos()
 
 			if chunkPos in self.requested:
+				lstart = time.time_ns()
 				self.requested[chunkPos] = False
 				self.chunks[chunkPos] = newChunk
 
 				# create chunk mesh:
-				vertices, indices = self.chunks[chunkPos].getMesh(None, None, None, None)
+				self.chunks[chunkPos].generateMesh(None, None, None, None)
+				vertices, indices = self.chunks[chunkPos].getMesh()
+				# vertices, indices = np.array([0]),np.array([0])#self.chunks[chunkPos].getMesh()
 
 				vao, vbo, ebo = World.createBuffers()
+				# lstart = time.time_ns()
 
 				self.meshes[chunkPos] = (vao, vbo, ebo, len(indices))
+
+				upstart = time.time_ns()
 
 				# upload vertex + index buffer:
 				if len(indices) > 0:
 					glNamedBufferStorage(self.meshes[chunkPos][1], len(vertices) * 4, vertices, GL_DYNAMIC_STORAGE_BIT)
 					glNamedBufferStorage(self.meshes[chunkPos][2], len(indices) * 4, indices, GL_DYNAMIC_STORAGE_BIT)
+
+				if time.time_ns() - lstart > 5_000_000:
+					print(" -- chunk took", (upstart - lstart) / 1_000_000, "ms upload took ", (time.time_ns() - upstart) / 1_000_000, "ms")
+
+		# afterMeshGen = time.time_ns()
+
+		# if (afterMeshGen - start) > 1_000_000: # more than 1 ms
+		# 	print(" -- load:", (afterLoad - start) / 1_000_000, "ms  meshGen:", (afterMeshGen - afterLoad) / 1_000_000)
+
+		# print("syncChunks() took", (time.time_ns() - start) / 1000, "us")
 			
-			numLoaded += 1
-			if numLoaded >= MAX_LOADS_PER_FRAME:
-				return
-
-	def loadChunk(self, chunkPos):
-		# self.requestChunk(chunkPos)
-		# return
-
-		start = time.time_ns()
-		# load chunk:
-		self.chunks[chunkPos] = Chunk(*chunkPos)
-
-		print("Created chunk in:", (time.time_ns() - start) / (10**6), "ms")
-
+			# numLoaded += 1
+			# if numLoaded >= MAX_LOADS_PER_FRAME:
+			# 	return
+			
+	def loadChunkMesh(self, chunkPos):
 		start = time.time_ns()
 		# create chunk mesh:
-		# vertices, indices = Chunk(*chunkPos).getMesh(None, None, None, None)
-		vertices, indices = self.chunks[chunkPos].getMesh(None, None, None, None)
+		self.chunks[chunkPos].generateMesh(None, None, None, None)
+		vertices, indices = self.chunks[chunkPos].getMesh()
 		# print("Loaded Mesh in:", (time.time_ns() - start) / (10**6), "ms")
 
 		# start = time.time_ns()
@@ -134,6 +154,19 @@ class World:
 			glNamedBufferStorage(self.meshes[chunkPos][2], len(indices) * 4, indices, GL_DYNAMIC_STORAGE_BIT)
 		# print("Uploaded Mesh in:", (time.time_ns() - start) / (10**6), "ms")
 		# print()
+		
+
+	def loadChunk(self, chunkPos):
+		# self.requestChunk(chunkPos)
+		# return
+
+		start = time.time_ns()
+		# load chunk:
+		self.chunks[chunkPos] = Chunk(*chunkPos)
+
+		print("Created chunk in:", (time.time_ns() - start) / (10**6), "ms")
+
+		self.loadChunkMesh(chunkPos)
 
 
 	def unloadChunk(self, chunkPos):
@@ -155,7 +188,7 @@ class World:
 		start = time.time_ns()
 
 		MAX_LOADS_PER_FRAME = 1
-		LIMIT_CHUNK_LOADS = True
+		LIMIT_CHUNK_LOADS = False#True
 
 		centerChunk = (pos[0]//16, pos[2]//16)
 
@@ -175,11 +208,11 @@ class World:
 				chunkPos = (centerChunk[0] + x, centerChunk[1] + z)
 				d = max(abs(chunkPos[0] - centerChunk[0]),  abs(chunkPos[1] - centerChunk[1]))
 				if d <= viewDist and chunkPos not in self.chunks:
-					self.loadChunk(chunkPos)
-					numCreated += 1
+					# self.loadChunk(chunkPos)
+					# numCreated += 1
 
-					# if self.requestChunk(chunkPos):
-					# 	numCreated += 1
+					if self.requestChunk(chunkPos):
+						numCreated += 1
 
 					# print("Created at:", chunkPos)
 
@@ -191,12 +224,12 @@ class World:
 						break
 		
 
-		# if numCreated!=0 or numDeleted!=0:
-		if time.time_ns() - start > 1_000_000: # more than 1ms
+		if numCreated!=0 or numDeleted!=0:
+		# if time.time_ns() - start > 1_000_000: # more than 1ms
 			print("Requested:", numCreated, "Deleted:", numDeleted, "In:", (time.time_ns() - start) / (10**6), "ms")
 			# print("Created:", numCreated, "Deleted:", numDeleted, "In:", (time.time_ns() - start) / (10**6), "ms")
 		
 		start = time.time_ns()
-		# self.syncChunks()
+		self.syncChunks()
 		if time.time_ns() - start > 1_000_000: # more than 1ms
 			print("Synced in:", (time.time_ns() - start) / (10**6), "ms")
